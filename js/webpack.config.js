@@ -1,6 +1,7 @@
-module.exports =  {
-  //mode: 'development',
-  devtool: 'cheap-module-source-map',
+const path = require('path');
+
+module.exports = (env, argv) => ({
+  devtool: argv.mode === 'development' ? 'eval-source-map' : 'source-map',
   entry: {
     timer: './src/timer.js',
     clients: './src/clients.js',
@@ -14,7 +15,9 @@ module.exports =  {
   },
   output: {
     filename: '[name].js',
-    path: __dirname + '/dist'
+    path: path.resolve(__dirname, 'dist'),
+    clean: true,
+    assetModuleFilename: '[contenthash][ext][query]',
   },
   resolve: {
     alias: {
@@ -28,10 +31,9 @@ module.exports =  {
             use: ['style-loader', 'css-loader'],
           },
           {
-            test: /\.(jpg|png|jpeg|svg)$/,
-            loader: 'file-loader'
-        },
+            test: /\.(jpg|png|jpeg|svg)$/i,
+            type: 'asset/resource',
+          },
         ]
       },
-};
-
+});

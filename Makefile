@@ -8,8 +8,8 @@
 #
 # Dependencies:
 # * make
-# * which
-# * curl: used if phpunit and composer are not installed to fetch them from the web
+# * php: used for Composer fallback installation
+# * composer, or curl plus php so Composer can be fetched locally
 # * tar: for building the archive
 # * npm: for building and testing everything JS
 #
@@ -17,27 +17,9 @@
 # will be skipped. The same goes for the package.json which can be located in
 # the app root or the js/ directory.
 #
-# The npm command by launches the npm build script:
+# The npm command installs locked dependencies and launches the npm build script:
 #
-#    npm run build
-#
-# The npm test command launches the npm test script:
-#
-#    npm run test
-#
-# The idea behind this is to be completely testing and build tool agnostic. All
-# build tools and additional package managers should be installed locally in
-# your project, since this won't pollute people's global namespace.
-#
-# The following npm scripts in your package.json install and update the bower
-# and npm dependencies and use gulp as build system (notice how everything is
-# run from the node_modules folder):
-#
-#    "scripts": {
-#        "test": "node node_modules/gulp-cli/bin/gulp.js karma",
-#        "prebuild": "npm install && node_modules/bower/bin/bower install && node_modules/bower/bin/bower update",
-#        "build": "node node_modules/gulp-cli/bin/gulp.js"
-#    },
+#    npm ci && npm run build
 
 app_name=$(notdir $(CURDIR))
 build_tools_directory=$(CURDIR)/build/tools
@@ -45,11 +27,31 @@ source_build_directory=$(CURDIR)/build/artifacts/source
 source_package_name=$(source_build_directory)/$(app_name)
 appstore_build_directory=$(CURDIR)/build/artifacts/appstore
 appstore_package_name=$(appstore_build_directory)/$(app_name)
-npm=$(shell which npm 2> /dev/null)
-composer=$(shell which composer 2> /dev/null)
-php=$(shell which php-8.2 2> /dev/null) -dallow_url_fopen=On
+composer_phar=$(build_tools_directory)/composer.phar
+composer_installer=$(build_tools_directory)/composer-setup.php
 
-COMPOSER_ARGS=--prefer-dist --no-dev
+NPM ?= npm
+COMPOSER ?= composer
+PHP ?= php
+PHP_FLAGS ?= -dallow_url_fopen=On
+CURL ?= curl
+TAR ?= tar
+TAR_OWNER_ARGS ?= --owner=0 --group=0
+NEXTCLOUD_ROOT ?= $(CURDIR)/../..
+NEXTCLOUD_BOOTSTRAP ?= $(NEXTCLOUD_ROOT)/lib/base.php
+NEXTCLOUD_APP_DIR ?= $(NEXTCLOUD_ROOT)/apps/$(app_name)
+default_phpunit = $(firstword $(wildcard $(NEXTCLOUD_ROOT)/vendor-bin/phpunit/vendor/bin/phpunit $(NEXTCLOUD_ROOT)/vendor/bin/phpunit $(CURDIR)/vendor/phpunit/phpunit/phpunit))
+PHPUNIT ?= $(if $(default_phpunit),$(default_phpunit),$(NEXTCLOUD_ROOT)/vendor-bin/phpunit/vendor/bin/phpunit)
+
+COMPOSER_ARGS ?= --prefer-dist --no-dev --no-interaction
+COMPOSER_DEV_ARGS ?= --prefer-dist --no-interaction
+
+define require_command
+	@command -v "$(1)" >/dev/null 2>&1 || { \
+		printf '%s\n' "Error: required command '$(1)' not found. Install it or rerun with $(2)=/path/to/$(1)." >&2; \
+		exit 127; \
+	}
+endef
 
 all: build
 
@@ -59,38 +61,50 @@ all: build
 .PHONY: build
 build:
 ifneq (,$(wildcard $(CURDIR)/composer.json))
-	gmake composer
+	$(MAKE) composer
 endif
 ifneq (,$(wildcard $(CURDIR)/package.json))
-	gmake npm
+	$(MAKE) npm
 endif
 ifneq (,$(wildcard $(CURDIR)/js/package.json))
-	gmake npm
+	$(MAKE) npm
 endif
 
 # Installs and updates the composer dependencies. If composer is not installed
 # a copy is fetched from the web
 .PHONY: composer
 composer:
-ifeq (, $(composer))
-	@echo "No composer command available, downloading a copy from the web"
-	mkdir -p $(build_tools_directory)
-	curl -sS https://getcomposer.org/installer | $(php)
-	mv composer.phar $(build_tools_directory)
-	$(php) $(build_tools_directory)/composer.phar install $(COMPOSER_ARGS)
-	$(php) $(build_tools_directory)/composer.phar update $(COMPOSER_ARGS)
-else
-	composer install $(COMPOSER_ARGS)
-	composer update $(COMPOSER_ARGS)
-endif
+	@if command -v "$(COMPOSER)" >/dev/null 2>&1; then \
+		"$(COMPOSER)" install $(COMPOSER_ARGS); \
+	else \
+		if ! command -v "$(PHP)" >/dev/null 2>&1; then \
+			printf '%s\n' "Error: composer is not installed and PHP command '$(PHP)' was not found. Install Composer, install PHP, or rerun with PHP=/path/to/php." >&2; \
+			exit 127; \
+		fi; \
+		if ! command -v "$(CURL)" >/dev/null 2>&1; then \
+			printf '%s\n' "Error: composer is not installed and curl command '$(CURL)' was not found. Install Composer, install curl, or rerun with CURL=/path/to/curl." >&2; \
+			exit 127; \
+		fi; \
+		printf '%s\n' "No composer command available, downloading Composer to $(composer_phar)"; \
+		mkdir -p "$(build_tools_directory)"; \
+		"$(CURL)" -sS https://getcomposer.org/installer -o "$(composer_installer)"; \
+		"$(PHP)" $(PHP_FLAGS) "$(composer_installer)" --install-dir="$(build_tools_directory)" --filename=composer.phar; \
+		rm -f "$(composer_installer)"; \
+		"$(PHP)" $(PHP_FLAGS) "$(composer_phar)" install $(COMPOSER_ARGS); \
+	fi
+
+.PHONY: composer-dev
+composer-dev: COMPOSER_ARGS=$(COMPOSER_DEV_ARGS)
+composer-dev: composer
 
 # Installs npm dependencies
 .PHONY: npm
 npm:
+	$(call require_command,$(NPM),NPM)
 ifeq (,$(wildcard $(CURDIR)/package.json))
-	cd js && $(npm) install && $(npm) run build
+	cd js && $(NPM) ci && $(NPM) run build
 else
-	npm run build
+	$(NPM) ci && $(NPM) run build
 endif
 
 # Removes the appstore build
@@ -107,34 +121,55 @@ distclean: clean
 	rm -rf js/vendor
 	rm -rf js/node_modules
 
+.PHONY: nextcloud-link
+nextcloud-link:
+	@if [ ! -f "$(NEXTCLOUD_BOOTSTRAP)" ]; then \
+		printf '%s\n' "Error: Nextcloud test bootstrap not found at $(NEXTCLOUD_BOOTSTRAP). Rerun with NEXTCLOUD_ROOT=/path/to/nextcloud." >&2; \
+		exit 127; \
+	fi
+	@if [ "$(NEXTCLOUD_APP_DIR)" = "$(CURDIR)" ]; then \
+		printf '%s\n' "App is already located at $(NEXTCLOUD_APP_DIR)"; \
+	else \
+		if [ -e "$(NEXTCLOUD_APP_DIR)" ] && [ ! -L "$(NEXTCLOUD_APP_DIR)" ]; then \
+			printf '%s\n' "Error: $(NEXTCLOUD_APP_DIR) already exists and is not a symlink. Move it aside or set NEXTCLOUD_APP_DIR=/path/to/link." >&2; \
+			exit 1; \
+		fi; \
+		mkdir -p "$$(dirname "$(NEXTCLOUD_APP_DIR)")"; \
+		ln -sfn "$(CURDIR)" "$(NEXTCLOUD_APP_DIR)"; \
+		printf '%s\n' "Linked $(CURDIR) -> $(NEXTCLOUD_APP_DIR)"; \
+	fi
+
 # Builds the source and appstore package
 .PHONY: dist
 dist:
-	gmake source
-	gmake appstore
+	$(MAKE) source
+	$(MAKE) appstore
 
 # Builds the source package
 .PHONY: source
 source:
+	$(call require_command,$(TAR),TAR)
 	rm -rf $(source_build_directory)
 	mkdir -p $(source_build_directory)
-	gtar cvzf $(source_package_name).tar.gz ../$(app_name) \
+	$(TAR) czf $(source_package_name).tar.gz \
 	--exclude-vcs \
 	--exclude="../$(app_name)/build" \
 	--exclude="../$(app_name)/js/node_modules" \
 	--exclude="../$(app_name)/node_modules" \
 	--exclude="../$(app_name)/*.log" \
 	--exclude="../$(app_name)/js/*.log" \
+	../$(app_name)
 
 # Builds the source package for the app store, ignores php and js tests
 .PHONY: appstore
 appstore:
+	$(call require_command,$(TAR),TAR)
 	rm -rf $(appstore_build_directory)
 	mkdir -p $(appstore_build_directory)
 	echo $(app_name)
 	pwd
-	gtar  \
-	--owner=0 --group=0 \
+	$(TAR)  \
+	$(TAR_OWNER_ARGS) \
 	--exclude-vcs \
 	--exclude="$(app_name)/build" \
 	--exclude="$(app_name)/tests" \
@@ -160,6 +195,16 @@ appstore:
 	 -czf $(appstore_package_name).tar.gz ../$(app_name) 
 
 .PHONY: test
-test: composer
-	$(CURDIR)/vendor/phpunit/phpunit/phpunit -c phpunit.xml
-	$(CURDIR)/vendor/phpunit/phpunit/phpunit -c phpunit.integration.xml
+test:
+	sh tests/build/makefile-portability.sh
+	@if [ ! -f "$(NEXTCLOUD_BOOTSTRAP)" ]; then \
+		printf '%s\n' "Error: Nextcloud test bootstrap not found at $(NEXTCLOUD_BOOTSTRAP). Run this target from nextcloud/apps/$(app_name) or rerun with NEXTCLOUD_ROOT=/path/to/nextcloud." >&2; \
+		exit 127; \
+	fi
+	$(MAKE) composer-dev
+	@if [ ! -x "$(PHPUNIT)" ]; then \
+		printf '%s\n' "Error: PHPUnit not found at $(PHPUNIT). Install Nextcloud PHPUnit dependencies or rerun with PHPUNIT=/path/to/phpunit." >&2; \
+		exit 127; \
+	fi
+	NEXTCLOUD_ROOT="$(NEXTCLOUD_ROOT)" $(PHPUNIT) -c phpunit.xml
+	NEXTCLOUD_ROOT="$(NEXTCLOUD_ROOT)" $(PHPUNIT) -c phpunit.integration.xml

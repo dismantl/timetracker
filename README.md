@@ -1,52 +1,97 @@
 # Time Tracker
-Place this app in **nextcloud/apps/**
 
-## Building the app
+Place this app in `nextcloud/apps/`.
 
-The app can be built by using the provided Makefile by running:
+## Build Requirements
 
-    make
+- `make`
+- `php` for Composer fallback installation
+- `composer`, or `curl` plus `php` so the Makefile can download Composer locally
+- `npm`
+- `tar` for source and app store archives
 
-This requires the following things to be present:
-* make
-* which
-* tar: for building the archive
-* curl: used if phpunit and composer are not installed to fetch them from the web
-* npm: for building and testing everything JS, only required if a package.json is placed inside the **js/** folder
+The JavaScript build is tested with Node.js 20 and npm 10. Newer runtimes may work, but npm can warn when package engine ranges do not match the supported build runtime.
 
-The make command will install or update Composer dependencies if a composer.json is present and also **npm run build** if a package.json is present in the **js/** folder. The npm **build** script should use local paths for build systems and package managers, so people that simply want to build the app won't need to install npm libraries globally, e.g.:
+## Building the App
 
-**package.json**:
-```json
-"scripts": {
-    "test": "node node_modules/gulp-cli/bin/gulp.js karma",
-    "prebuild": "npm install && node_modules/bower/bin/bower install && node_modules/bower/bin/bower update",
-    "build": "node node_modules/gulp-cli/bin/gulp.js"
-}
+Run the full build from the app root:
+
+```sh
+make
 ```
 
+The Makefile runs Composer when `composer.json` is present and runs `npm ci && npm run build` for the JavaScript assets in `js/`.
 
-## Publish to App Store
+Tool commands can be overridden without editing the Makefile:
 
-First get an account for the [App Store](http://apps.nextcloud.com/) then run:
+```sh
+make PHP=/usr/local/bin/php COMPOSER=/usr/local/bin/composer NPM=/usr/local/bin/npm
+```
 
-    make && make appstore
+If Composer is not installed, the Makefile downloads Composer into `build/tools/` and runs it with `php`. The PHP command defaults to `php`, not a versioned binary such as `php-8.2`.
 
-The archive is located in build/artifacts/appstore and can then be uploaded to the App Store.
+## Frontend Build
 
-## Running tests
-You can use the provided Makefile to run all tests by using:
+From `js/`:
 
-    make test
+```sh
+npm ci
+npm run build
+```
 
-This will run the PHP unit and integration tests and if a package.json is present in the **js/** folder will execute **npm run test**
+Useful scripts:
 
-Of course you can also install [PHPUnit](http://phpunit.de/getting-started.html) and use the configurations directly:
+- `npm run build`: production Webpack build
+- `npm run build:dev`: development Webpack build
+- `npm run audit`: audit the lockfile without modifying dependencies
 
-    phpunit -c phpunit.xml
+## Packaging
 
-or:
+Build source and app store archives:
 
-    phpunit -c phpunit.integration.xml
+```sh
+make dist
+```
 
-for integration tests
+The archive command defaults to `tar`. If your platform needs a different command or tar option set, override it:
+
+```sh
+make appstore TAR=gtar
+make appstore TAR_OWNER_ARGS=
+```
+
+## Running Tests
+
+The PHP tests need a Nextcloud server checkout because the test bootstrap loads Nextcloud internals from `lib/base.php`.
+
+Create a local test harness:
+
+```sh
+git clone --recursive --branch stable34 https://github.com/nextcloud/server.git nextcloud
+cd nextcloud
+composer install --no-dev --prefer-dist --no-interaction
+cd vendor-bin/phpunit
+composer install --prefer-dist --no-interaction
+cd ../../
+php occ maintenance:install --database sqlite --admin-user admin --admin-pass admin
+cd /path/to/timetracker
+make nextcloud-link NEXTCLOUD_ROOT=/path/to/nextcloud
+cd /path/to/nextcloud
+php occ app:enable timetracker
+cd /path/to/timetracker
+make test NEXTCLOUD_ROOT=/path/to/nextcloud
+```
+
+When the app already lives under `nextcloud/apps/timetracker`, the shorter form is:
+
+```sh
+make test
+```
+
+The Makefile defaults to Nextcloud's PHPUnit binary at `NEXTCLOUD_ROOT/vendor-bin/phpunit/vendor/bin/phpunit`. Override `PHPUNIT=/path/to/phpunit` if needed.
+
+When the app is not physically located at `nextcloud/apps/timetracker`, either create the symlink yourself or use:
+
+```sh
+make nextcloud-link NEXTCLOUD_ROOT=/path/to/nextcloud
+```

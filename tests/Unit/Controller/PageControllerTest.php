@@ -2,18 +2,18 @@
 
 namespace OCA\TimeTracker\Tests\Unit\Controller;
 
-use PHPUnit_Framework_TestCase;
+use PHPUnit\Framework\TestCase;
 
 use OCP\AppFramework\Http\TemplateResponse;
 
 use OCA\TimeTracker\Controller\PageController;
 
 
-class PageControllerTest extends PHPUnit_Framework_TestCase {
+class PageControllerTest extends TestCase {
 	private $controller;
 	private $userId = 'john';
 
-	public function setUp() {
+	protected function setUp(): void {
 		$request = $this->getMockBuilder('OCP\IRequest')->getMock();
 
 		$this->controller = new PageController(

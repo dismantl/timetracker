@@ -1,0 +1,92 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+          cache-dependency-path: js/package-lock.json
+
+      - name: Check Makefile portability
+        run: sh tests/build/makefile-portability.sh
+
+      - name: Build frontend through Makefile
+        run: make npm
+
+      - name: Audit frontend lockfile
+        working-directory: js
+        run: npm run audit
+
+  php-tests:
+    name: PHP tests
+    runs-on: ubuntu-latest
+
+    env:
+      NEXTCLOUD_REF: stable34
+
+    steps:
+      - name: Check out app
+        uses: actions/checkout@v6
+        with:
+          path: app
+
+      - name: Check out Nextcloud
+        uses: actions/checkout@v6
+        with:
+          repository: nextcloud/server
+          ref: ${{ env.NEXTCLOUD_REF }}
+          path: nextcloud
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: apcu, curl, dom, fileinfo, gd, mbstring, pdo_sqlite, posix, simplexml, xml, xmlreader, xmlwriter, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Install Nextcloud dependencies
+        working-directory: nextcloud
+        run: composer install --no-dev --prefer-dist --no-interaction
+
+      - name: Install Nextcloud PHPUnit dependencies
+        working-directory: nextcloud/vendor-bin/phpunit
+        run: composer install --prefer-dist --no-interaction
+
+      - name: Link app into Nextcloud
+        working-directory: app
+        run: make nextcloud-link NEXTCLOUD_ROOT="$GITHUB_WORKSPACE/nextcloud"
+
+      - name: Install Nextcloud test instance
+        working-directory: nextcloud
+        run: |
+          mkdir -p data
+          php occ maintenance:install \
+            --database sqlite \
+            --admin-user admin \
+            --admin-pass admin
+          php occ app:enable timetracker
+
+      - name: Run PHP tests
+        working-directory: app
+        run: make test NEXTCLOUD_ROOT="$GITHUB_WORKSPACE/nextcloud"
