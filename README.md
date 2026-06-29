@@ -77,6 +77,8 @@ The artifact contains:
 - `timetracker.tar.gz`: app package for `nextcloud/apps/`
 - `timetracker.tar.gz.sha256`: checksum for the package
 
+The package includes production Composer autoload files, including `vendor/autoload.php` and `vendor/composer/`.
+
 The same workflow also runs when a tag matching `v*` is pushed.
 
 ## Running Tests
