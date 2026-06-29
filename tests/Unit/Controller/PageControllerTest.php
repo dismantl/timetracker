@@ -5,19 +5,24 @@ namespace OCA\TimeTracker\Tests\Unit\Controller;
 use PHPUnit\Framework\TestCase;
 
 use OCP\AppFramework\Http\TemplateResponse;
+use OCP\IRequest;
+use OCP\IUser;
+use OCP\IUserSession;
 
 use OCA\TimeTracker\Controller\PageController;
 
 
 class PageControllerTest extends TestCase {
 	private $controller;
-	private $userId = 'john';
 
 	protected function setUp(): void {
-		$request = $this->getMockBuilder('OCP\IRequest')->getMock();
+		$request = $this->createMock(IRequest::class);
+		$user = $this->createMock(IUser::class);
+		$userSession = $this->createMock(IUserSession::class);
+		$userSession->method('getUser')->willReturn($user);
 
 		$this->controller = new PageController(
-			'timetracker', $request, $this->userId
+			'timetracker', $request, $userSession
 		);
 	}
 
