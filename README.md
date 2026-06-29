@@ -60,11 +60,11 @@ make appstore TAR=gtar
 make appstore TAR_OWNER_ARGS=
 ```
 
-## Downloadable CI Package
+## Downloadable Packages
 
 The `Package` GitHub Actions workflow builds a downloadable appstore tarball.
 
-To build one on demand:
+To build a short-lived Actions artifact on demand:
 
 1. Open the repository on GitHub.
 2. Go to **Actions**.
@@ -79,7 +79,7 @@ The artifact contains:
 
 The package includes production Composer autoload files, including `vendor/autoload.php` and `vendor/composer/`.
 
-The same workflow also runs when a tag matching `v*` is pushed.
+To publish a durable GitHub Release, push a tag matching `v*`. The workflow attaches the same tarball and checksum to the release.
 
 ## Running Tests
 
