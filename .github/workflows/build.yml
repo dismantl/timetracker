@@ -46,7 +46,7 @@ jobs:
       - name: Check out app
         uses: actions/checkout@v6
         with:
-          path: app
+          path: timetracker
 
       - name: Check out Nextcloud
         uses: actions/checkout@v6
@@ -74,7 +74,7 @@ jobs:
         run: composer install --prefer-dist --no-interaction
 
       - name: Link app into Nextcloud
-        working-directory: app
+        working-directory: timetracker
         run: make nextcloud-link NEXTCLOUD_ROOT="$GITHUB_WORKSPACE/nextcloud"
 
       - name: Install Nextcloud test instance
@@ -85,8 +85,17 @@ jobs:
             --database sqlite \
             --admin-user admin \
             --admin-pass admin
+          test -f apps/timetracker/appinfo/info.xml
+          php -r '
+          require "version.php";
+          $info = simplexml_load_file("apps/timetracker/appinfo/info.xml");
+          $nextcloud = $info->dependencies->nextcloud;
+          printf("Nextcloud version: %s\n", $OC_VersionString);
+          printf("App id: %s\n", (string)$info->id);
+          printf("App Nextcloud range: %s - %s\n", (string)$nextcloud["min-version"], (string)$nextcloud["max-version"]);
+          '
           php occ app:enable timetracker
 
       - name: Run PHP tests
-        working-directory: app
+        working-directory: timetracker
         run: make test NEXTCLOUD_ROOT="$GITHUB_WORKSPACE/nextcloud"

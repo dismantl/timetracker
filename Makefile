@@ -21,6 +21,7 @@
 #
 #    npm ci && npm run build
 
+APP_ID ?= timetracker
 app_name=$(notdir $(CURDIR))
 build_tools_directory=$(CURDIR)/build/tools
 source_build_directory=$(CURDIR)/build/artifacts/source
@@ -39,7 +40,7 @@ TAR ?= tar
 TAR_OWNER_ARGS ?= --owner=0 --group=0
 NEXTCLOUD_ROOT ?= $(CURDIR)/../..
 NEXTCLOUD_BOOTSTRAP ?= $(NEXTCLOUD_ROOT)/lib/base.php
-NEXTCLOUD_APP_DIR ?= $(NEXTCLOUD_ROOT)/apps/$(app_name)
+NEXTCLOUD_APP_DIR ?= $(NEXTCLOUD_ROOT)/apps/$(APP_ID)
 default_phpunit = $(firstword $(wildcard $(NEXTCLOUD_ROOT)/vendor-bin/phpunit/vendor/bin/phpunit $(NEXTCLOUD_ROOT)/vendor/bin/phpunit $(CURDIR)/vendor/phpunit/phpunit/phpunit))
 PHPUNIT ?= $(if $(default_phpunit),$(default_phpunit),$(NEXTCLOUD_ROOT)/vendor-bin/phpunit/vendor/bin/phpunit)
 
@@ -198,7 +199,7 @@ appstore:
 test:
 	sh tests/build/makefile-portability.sh
 	@if [ ! -f "$(NEXTCLOUD_BOOTSTRAP)" ]; then \
-		printf '%s\n' "Error: Nextcloud test bootstrap not found at $(NEXTCLOUD_BOOTSTRAP). Run this target from nextcloud/apps/$(app_name) or rerun with NEXTCLOUD_ROOT=/path/to/nextcloud." >&2; \
+		printf '%s\n' "Error: Nextcloud test bootstrap not found at $(NEXTCLOUD_BOOTSTRAP). Run this target from nextcloud/apps/$(APP_ID) or rerun with NEXTCLOUD_ROOT=/path/to/nextcloud." >&2; \
 		exit 127; \
 	fi
 	$(MAKE) composer-dev

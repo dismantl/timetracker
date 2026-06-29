@@ -1,0 +1,48 @@
+name: Package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  appstore-package:
+    name: Build appstore package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+          cache-dependency-path: js/package-lock.json
+
+      - name: Build frontend assets
+        run: make npm
+
+      - name: Build appstore tarball
+        run: make appstore
+
+      - name: Generate checksum
+        run: |
+          cd build/artifacts/appstore
+          sha256sum timetracker.tar.gz > timetracker.tar.gz.sha256
+
+      - name: Upload app package
+        uses: actions/upload-artifact@v7
+        with:
+          name: timetracker-appstore-package
+          path: |
+            build/artifacts/appstore/timetracker.tar.gz
+            build/artifacts/appstore/timetracker.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

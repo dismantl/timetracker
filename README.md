@@ -60,6 +60,25 @@ make appstore TAR=gtar
 make appstore TAR_OWNER_ARGS=
 ```
 
+## Downloadable CI Package
+
+The `Package` GitHub Actions workflow builds a downloadable appstore tarball.
+
+To build one on demand:
+
+1. Open the repository on GitHub.
+2. Go to **Actions**.
+3. Select **Package**.
+4. Click **Run workflow**.
+5. Download the `timetracker-appstore-package` artifact from the completed run.
+
+The artifact contains:
+
+- `timetracker.tar.gz`: app package for `nextcloud/apps/`
+- `timetracker.tar.gz.sha256`: checksum for the package
+
+The same workflow also runs when a tag matching `v*` is pushed.
+
 ## Running Tests
 
 The PHP tests need a Nextcloud server checkout because the test bootstrap loads Nextcloud internals from `lib/base.php`.
