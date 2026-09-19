@@ -88,7 +88,7 @@ The PHP tests need a Nextcloud server checkout because the test bootstrap loads 
 Create a local test harness:
 
 ```sh
-git clone --recursive --branch stable34 https://github.com/nextcloud/server.git nextcloud
+git clone --recursive --branch stable35 https://github.com/nextcloud/server.git nextcloud
 cd nextcloud
 composer install --no-dev --prefer-dist --no-interaction
 cd vendor-bin/phpunit
