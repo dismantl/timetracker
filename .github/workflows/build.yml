@@ -36,11 +36,17 @@ jobs:
         run: npm run audit
 
   php-tests:
-    name: PHP tests
+    name: PHP tests (Nextcloud ${{ matrix.nextcloud_ref }}, PHP ${{ matrix.php_version }})
     runs-on: ubuntu-latest
 
-    env:
-      NEXTCLOUD_REF: stable34
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nextcloud_ref: stable34
+            php_version: '8.2'
+          - nextcloud_ref: stable35
+            php_version: '8.5'
 
     steps:
       - name: Check out app
@@ -52,7 +58,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: nextcloud/server
-          ref: ${{ env.NEXTCLOUD_REF }}
+          ref: ${{ matrix.nextcloud_ref }}
           path: nextcloud
           submodules: recursive
           fetch-depth: 1
@@ -60,7 +66,7 @@ jobs:
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: ${{ matrix.php_version }}
           extensions: apcu, curl, dom, fileinfo, gd, mbstring, pdo_sqlite, posix, simplexml, xml, xmlreader, xmlwriter, zip
           coverage: none
           tools: composer:v2
